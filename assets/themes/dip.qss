@@ -1,0 +1,507 @@
+/* ==========================================================
+   DIP TOOLKIT PRO
+   Thème officiel v1.0
+   Dépannage Informatique Plus
+   ========================================================== */
+
+
+/* ==========================================================
+   PALETTE
+   ----------------------------------------------------------
+   Bleu principal : #1E3A5F
+   Turquoise      : #00A7A7
+   Fond clair     : #F4F6F8
+   Blanc          : #FFFFFF
+   Bordure        : #D8D8D8
+   Texte          : #303030
+   Succès         : #2E7D32
+   Attention      : #F57C00
+   Danger         : #D32F2F
+========================================================== */
+
+
+/* ==========================================================
+   APPLICATION
+========================================================== */
+
+QMainWindow{
+
+    background:#F4F6F8;
+
+}
+
+QWidget{
+
+    background:#F4F6F8;
+
+    color:#303030;
+
+    font-family:"Segoe UI";
+
+    font-size:10pt;
+
+}
+
+
+
+/* ==========================================================
+   SIDEBAR
+========================================================== */
+
+QWidget#Sidebar{
+
+    background:#1E3A5F;
+
+    border:none;
+
+}
+
+
+
+/* ==========================================================
+   LOGO
+========================================================== */
+
+QLabel#SidebarLogo{
+
+    background:transparent;
+
+    border:none;
+
+    padding:12px;
+
+}
+
+
+
+/* ==========================================================
+   TITRE ENTREPRISE
+========================================================== */
+
+QLabel#CompanyName{
+
+    background:transparent;
+
+    color:white;
+
+    font-size:13pt;
+
+    font-weight:bold;
+
+}
+
+
+
+/* ==========================================================
+   VERSION
+========================================================== */
+
+QLabel#VersionLabel{
+
+    background:transparent;
+
+    color:#9FB6C9;
+
+    font-size:9pt;
+
+}
+
+
+
+/* ==========================================================
+   SEPARATEUR
+========================================================== */
+
+QFrame#SidebarSeparator{
+
+    background:#355D87;
+
+    max-height:1px;
+
+    border:none;
+
+}
+
+
+
+/* ==========================================================
+   BOUTONS SIDEBAR
+========================================================== */
+
+QWidget#Sidebar QPushButton{
+
+    background:transparent;
+
+    color:white;
+
+    border:none;
+
+    border-radius:10px;
+
+    padding:12px 18px;
+
+    text-align:left;
+
+    font-size:11pt;
+
+    font-weight:500;
+
+}
+
+
+
+QWidget#Sidebar QPushButton:hover{
+
+    background:#2C4F74;
+
+}
+
+
+
+QWidget#Sidebar QPushButton:pressed{
+
+    background:#244465;
+
+}
+
+
+
+QWidget#Sidebar QPushButton[active="true"]{
+
+    background:#00A7A7;
+
+    border-left:5px solid white;
+
+    font-weight:bold;
+
+}
+
+
+
+/* ==========================================================
+   FOOTER
+========================================================== */
+
+QLabel#SidebarFooter{
+
+    background:transparent;
+
+    color:#9FB6C9;
+
+    font-size:8pt;
+
+}
+
+
+
+/* ==========================================================
+   PAGES
+========================================================== */
+
+QWidget#DashboardPage,
+QWidget#DiagnosticPage,
+QWidget#LiveMonitorPage{
+
+    background:#F4F6F8;
+
+}
+
+
+
+/* ==========================================================
+   TITRES
+========================================================== */
+
+QLabel#PageTitle{
+
+    color:#1E3A5F;
+
+    font-size:22pt;
+
+    font-weight:bold;
+
+}
+
+
+
+/* ==========================================================
+   LABELS
+========================================================== */
+
+QLabel#InfoLabel{
+
+    background: transparent;
+
+    color: #303030;
+
+    font-size: 11pt;
+
+    padding: 4px 0px;
+
+}
+
+
+
+/* ==========================================================
+   CARDS
+========================================================== */
+
+QFrame#StatCard{
+
+    background:white;
+
+    border:1px solid #D8D8D8;
+
+    border-radius:14px;
+
+}
+
+
+
+QFrame#StatCard:hover{
+
+    border:2px solid #00A7A7;
+
+}
+
+
+
+/* ==========================================================
+   TITRE CARD
+========================================================== */
+
+QLabel#CardTitle{
+
+    color:#1E3A5F;
+
+    font-size:14pt;
+
+    font-weight:bold;
+
+}
+
+
+
+/* ==========================================================
+   VALEUR CARD
+========================================================== */
+
+QLabel#CardValue{
+
+    color:#202020;
+
+    font-size:30pt;
+
+    font-weight:bold;
+
+}
+
+
+
+/* ==========================================================
+   ETAT CARD
+========================================================== */
+
+QLabel#CardStatus{
+
+    font-size:10pt;
+
+    font-weight:bold;
+
+}
+
+
+
+QLabel#CardStatus[state="normal"]{
+
+    color:#2E7D32;
+
+}
+
+
+
+QLabel#CardStatus[state="warning"]{
+
+    color:#F57C00;
+
+}
+
+
+
+QLabel#CardStatus[state="danger"]{
+
+    color:#D32F2F;
+
+}
+
+
+
+/* ==========================================================
+   BARRE DE PROGRESSION
+========================================================== */
+
+QProgressBar{
+
+    border:none;
+
+    border-radius:6px;
+
+    background:#E5E5E5;
+
+    height:12px;
+
+    text-align:center;
+
+}
+
+
+
+QProgressBar::chunk{
+
+    background:#00A7A7;
+
+    border-radius:6px;
+
+}
+
+
+
+/* ==========================================================
+   INFOCARD
+========================================================== */
+
+QFrame#InfoCard{
+
+    background:white;
+
+    border:1px solid #D8D8D8;
+
+    border-radius:14px;
+
+}
+
+QFrame#InfoCard:hover{
+
+    border:2px solid #00A7A7;
+
+}
+
+
+/* ---------- Titre ---------- */
+
+QLabel#InfoCardTitle{
+
+    background:transparent;
+
+    color:#1E3A5F;
+
+    font-size:12pt;
+
+    font-weight:bold;
+
+}
+
+
+/* ---------- Valeur ---------- */
+
+QLabel#InfoCardValue{
+
+    background:transparent;
+
+    color:#303030;
+
+    font-size:14pt;
+
+    font-weight:500;
+
+}
+
+
+
+/* ==========================================================
+   SCROLLBAR
+========================================================== */
+
+QScrollBar:vertical{
+
+    background:transparent;
+
+    width:10px;
+
+}
+
+
+
+QScrollBar::handle:vertical{
+
+    background:#C7CED4;
+
+    border-radius:5px;
+
+}
+
+
+
+QScrollBar::handle:vertical:hover{
+
+    background:#00A7A7;
+
+}
+
+
+
+/* ==========================================================
+   TOOLTIP
+========================================================== */
+
+QToolTip{
+
+    background:#1E3A5F;
+
+    color:white;
+
+    border:none;
+
+    padding:8px;
+
+}
+
+
+
+/* ==========================================================
+   STATUS BAR
+========================================================== */
+
+QStatusBar{
+
+    background:white;
+
+    border-top:1px solid #D8D8D8;
+
+}
+
+/* ==========================================================
+   SOUS-TITRES
+========================================================== */
+
+QLabel#PageSubtitle{
+
+    background: transparent;
+
+    color: #6C757D;
+
+    font-size: 11pt;
+
+    padding-bottom: 8px;
+
+}
+
+/* ==========================================================
+   SUPERVISION
+========================================================== */
+
+QWidget#LiveMonitorPage{
+
+    background:#F4F6F8;
+
+}
