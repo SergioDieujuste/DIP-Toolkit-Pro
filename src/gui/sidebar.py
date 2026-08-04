@@ -19,7 +19,7 @@ class Sidebar(QWidget):
 
         self.setObjectName("Sidebar")
 
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(15, 20, 15, 20)
         layout.setSpacing(8)
 
@@ -53,6 +53,7 @@ class Sidebar(QWidget):
         company.setObjectName("CompanyName")
         company.setAlignment(Qt.AlignCenter)
         company.setWordWrap(True)
+        company.setStyleSheet("color: #ffffff; font-weight: bold; font-size: 13px; margin-top: 6px;")
 
         # ==================================================
         # Version
@@ -61,6 +62,7 @@ class Sidebar(QWidget):
         version = QLabel("Version 0.8")
         version.setObjectName("VersionLabel")
         version.setAlignment(Qt.AlignCenter)
+        version.setStyleSheet("color: #a0a5b5; font-size: 11px;")
 
         # ==================================================
         # Séparateur
@@ -69,6 +71,7 @@ class Sidebar(QWidget):
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
         line.setObjectName("SidebarSeparator")
+        line.setStyleSheet("background-color: #2e3440; max-height: 1px; border: none; margin: 8px 0px;")
 
         layout.addWidget(logo)
         layout.addWidget(company)
@@ -98,10 +101,11 @@ class Sidebar(QWidget):
         for texte, fichier in modules:
 
             bouton = QPushButton(texte)
+            bouton.setCursor(Qt.CursorShape.PointingHandCursor)
 
             bouton.setIcon(QIcon(str(icons / fichier)))
             bouton.setIconSize(QSize(20, 20))
-            bouton.setMinimumHeight(42)
+            bouton.setMinimumHeight(40)
 
             self.buttons[texte] = bouton
 
@@ -116,10 +120,39 @@ class Sidebar(QWidget):
         footer = QLabel("© Dépannage Informatique Plus")
         footer.setObjectName("SidebarFooter")
         footer.setAlignment(Qt.AlignCenter)
+        footer.setStyleSheet("color: #666e80; font-size: 10px; margin-top: 10px;")
 
         layout.addWidget(footer)
 
-        self.setLayout(layout)
+        # ==================================================
+        # Feuille de style globale pour la Sidebar
+        # ==================================================
+
+        self.setStyleSheet("""
+            QWidget#Sidebar {
+                background-color: #141721;
+                border-right: 1px solid #2e3440;
+            }
+            QPushButton {
+                background-color: transparent;
+                color: #a0a5b5;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 12px;
+                text-align: left;
+                font-size: 13px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #1e222d;
+                color: #ffffff;
+            }
+            QPushButton[active="true"] {
+                background-color: #00adb5;
+                color: #ffffff;
+                font-weight: bold;
+            }
+        """)
 
     def set_active_button(self, button_name):
 

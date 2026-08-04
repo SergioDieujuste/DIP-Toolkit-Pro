@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QVBoxLayout,
     QGridLayout,
+    QScrollArea,
 )
 
 from src.gui.widgets.stat_card import StatCard
@@ -23,33 +24,58 @@ class LiveMonitorPage(QWidget):
         # Layout principal
         # ==================================================
 
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(25, 25, 25, 25)
-        main_layout.setSpacing(20)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(15)
 
         # ==================================================
-        # Titre
+        # En-tête (Titre & Sous-titre)
         # ==================================================
+
+        title_layout = QVBoxLayout()
+        title_layout.setSpacing(4)
 
         self.title = QLabel("Supervision en temps réel")
         self.title.setObjectName("PageTitle")
+        self.title.setStyleSheet("font-size: 20px; font-weight: bold; color: #ffffff;")
 
         self.subtitle = QLabel(
             "Surveillez l'utilisation du processeur, de la mémoire et du disque en temps réel."
         )
         self.subtitle.setObjectName("PageSubtitle")
+        self.subtitle.setStyleSheet("font-size: 12px; color: #a0a5b5;")
         self.subtitle.setWordWrap(True)
 
-        main_layout.addWidget(self.title)
-        main_layout.addWidget(self.subtitle)
+        title_layout.addWidget(self.title)
+        title_layout.addWidget(self.subtitle)
+
+        main_layout.addLayout(title_layout)
+
+        # ==================================================
+        # Zone défilante (QScrollArea)
+        # ==================================================
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+        """)
+
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_layout.setSpacing(15)
 
         # ==================================================
         # Grille des cartes
         # ==================================================
 
         grid = QGridLayout()
-        grid.setHorizontalSpacing(20)
-        grid.setVerticalSpacing(20)
+        grid.setHorizontalSpacing(15)
+        grid.setVerticalSpacing(15)
 
         self.cpu = StatCard("🧠 CPU")
         self.ram = StatCard("💾 RAM")
@@ -59,15 +85,15 @@ class LiveMonitorPage(QWidget):
         grid.addWidget(self.ram, 0, 1)
         grid.addWidget(self.disk, 1, 0)
 
-        # Réserve la place pour une future carte
-        # (Température, Réseau ou GPU)
+        # Réserve la place pour une future carte (Température, Réseau ou GPU)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
 
-        main_layout.addLayout(grid)
-        main_layout.addStretch()
+        scroll_layout.addLayout(grid)
+        scroll_layout.addStretch()
 
-        self.setLayout(main_layout)
+        scroll_area.setWidget(scroll_content)
+        main_layout.addWidget(scroll_area)
 
         # ==================================================
         # Rafraîchissement automatique
@@ -78,6 +104,12 @@ class LiveMonitorPage(QWidget):
         self.timer.start(1000)
 
         self.update_stats()
+
+        self.setStyleSheet("""
+                    QWidget#DashboardPage, QScrollArea, QScrollArea > QWidget > QWidget {
+                        background-color: #0f111a;
+                    }
+                """)
 
     # ==================================================
     # Mise à jour des statistiques

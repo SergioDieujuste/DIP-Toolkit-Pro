@@ -1,79 +1,111 @@
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
     QLabel,
     QVBoxLayout,
-    QProgressBar,
+    QHBoxLayout,
+    QProgressBar
 )
+from PySide6.QtCore import Qt
 
 
 class DiskCard(QFrame):
 
-    def __init__(self, disk):
+    def __init__(self, disk_info):
         super().__init__()
 
         self.setObjectName("DiskCard")
 
-        layout = QVBoxLayout()
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(10)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(12)
 
-        # ==========================================
-        # Nom du disque
-        # ==========================================
+        # ----------------------------------------------------
+        # 1. EN-TÊTE DE LA CARTE (LECTEUR + SYSTÈME DE FICHIERS)
+        # ----------------------------------------------------
+        header_layout = QHBoxLayout()
+        
+        device_name = disk_info.get("device", "Disque")
+        mountpoint = disk_info.get("mountpoint", "")
+        title_text = f"💾 {device_name} ({mountpoint})" if mountpoint else f"💾 {device_name}"
 
-        self.title = QLabel(f"💾 {disk['name']}")
-        self.title.setObjectName("DiskTitle")
-        self.title.setAlignment(Qt.AlignCenter)
+        title = QLabel(title_text)
+        title.setStyleSheet("font-weight: bold; font-size: 14px; color: #00adb5;")
 
-        # ==========================================
-        # Barre d'utilisation
-        # ==========================================
+        fstype = QLabel(disk_info.get("fstype", "").upper())
+        fstype.setStyleSheet("""
+            color: #a0a5b5; 
+            background-color: #141721; 
+            padding: 2px 6px; 
+            border-radius: 4px; 
+            font-size: 10px; 
+            font-weight: bold;
+        """)
 
-        self.progress = QProgressBar()
-        self.progress.setObjectName("DiskProgress")
-        self.progress.setRange(0, 100)
-        self.progress.setValue(disk["percent"])
+        header_layout.addWidget(title)
+        header_layout.addStretch()
+        header_layout.addWidget(fstype)
 
-        # ==========================================
-        # Pourcentage
-        # ==========================================
+        layout.addLayout(header_layout)
 
-        self.percent = QLabel(f"{disk['percent']} % utilisé")
-        self.percent.setObjectName("DiskPercent")
-        self.percent.setAlignment(Qt.AlignCenter)
+        # ----------------------------------------------------
+        # 2. BARRE DE PROGRESSION
+        # ----------------------------------------------------
+        percent = int(disk_info.get("percent", 0))
 
-        # ==========================================
-        # Informations
-        # ==========================================
+        progress = QProgressBar()
+        progress.setRange(0, 100)
+        progress.setValue(percent)
+        progress.setTextVisible(False)
+        progress.setFixedHeight(8)
+        
+        # Changement de couleur si le disque est presque plein (>85%)
+        bar_color = "#e74c3c" if percent > 85 else "#00adb5"
+        
+        progress.setStyleSheet(f"""
+            QProgressBar {{
+                background-color: #141721;
+                border: 1px solid #2e3440;
+                border-radius: 4px;
+            }}
+            QProgressBar::chunk {{
+                background-color: {bar_color};
+                border-radius: 3px;
+            }}
+        """)
 
-        self.total = QLabel(f"Capacité : {disk['total']} Go")
-        self.total.setObjectName("DiskInfo")
+        layout.addWidget(progress)
 
-        self.used = QLabel(f"Utilisé : {disk['used']} Go")
-        self.used.setObjectName("DiskInfo")
+        # ----------------------------------------------------
+        # 3. DÉTAILS D'ESPACE (UTILISÉ / LIBRE / TOTAL)
+        # ----------------------------------------------------
+        details_layout = QHBoxLayout()
+        
+        used_str = disk_info.get("used", "0 GB")
+        total_str = disk_info.get("total", "0 GB")
+        free_str = disk_info.get("free", "0 GB")
 
-        self.free = QLabel(f"Libre : {disk['free']} Go")
-        self.free.setObjectName("DiskInfo")
+        info_label = QLabel(f"Utilisé : <b>{used_str}</b> / {total_str} ({percent}%)")
+        info_label.setStyleSheet("color: #ffffff; font-size: 11px;")
 
-        self.fs = QLabel(f"Système de fichiers : {disk['filesystem']}")
-        self.fs.setObjectName("DiskInfo")
+        free_label = QLabel(f"Libre : <b>{free_str}</b>")
+        free_label.setStyleSheet("color: #a0a5b5; font-size: 11px;")
 
-        # ==========================================
-        # Ajout des widgets
-        # ==========================================
+        details_layout.addWidget(info_label)
+        details_layout.addStretch()
+        details_layout.addWidget(free_label)
 
-        layout.addWidget(self.title)
-        layout.addWidget(self.progress)
-        layout.addWidget(self.percent)
+        layout.addLayout(details_layout)
 
-        layout.addSpacing(10)
-
-        layout.addWidget(self.total)
-        layout.addWidget(self.used)
-        layout.addWidget(self.free)
-        layout.addWidget(self.fs)
-
-        layout.addStretch()
-
-        self.setLayout(layout)
+        # ----------------------------------------------------
+        # 4. STYLE DE LA CARTE (SOMBRE & TURQUOISE)
+        # ----------------------------------------------------
+        self.setStyleSheet("""
+            QFrame#DiskCard {
+                background-color: #1e222d;
+                border: 1px solid #2e3440;
+                border-radius: 8px;
+            }
+            QFrame#DiskCard:hover {
+                border: 1px solid #00adb5;
+            }
+        """)

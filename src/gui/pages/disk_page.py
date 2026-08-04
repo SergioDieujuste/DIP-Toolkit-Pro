@@ -20,23 +20,31 @@ class DiskPage(BasePage):
         )
 
         # ==========================================
-        # Zone défilante
+        # Zone défilante (QScrollArea)
         # ==========================================
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.NoFrame)
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+        """)
 
         container = QWidget()
+        scroll_layout = QVBoxLayout(container)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_layout.setSpacing(15)
+
+        # ==========================================
+        # Grille des cartes
+        # ==========================================
 
         grid = QGridLayout()
-        grid.setContentsMargins(10, 10, 10, 10)
-        grid.setHorizontalSpacing(20)
-        grid.setVerticalSpacing(20)
-
-        # ==========================================
-        # Création des cartes
-        # ==========================================
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(15)
+        grid.setVerticalSpacing(15)
 
         disks = get_disks()
 
@@ -44,23 +52,27 @@ class DiskPage(BasePage):
         col = 0
 
         for disk in disks:
-
             card = DiskCard(disk)
-
             grid.addWidget(card, row, col)
 
             col += 1
-
             if col == 2:
                 col = 0
                 row += 1
 
-        container.setLayout(grid)
+        scroll_layout.addLayout(grid)
+        scroll_layout.addStretch()
 
-        scroll.setWidget(container)
+        scroll_area.setWidget(container)
 
         # ==========================================
         # Ajout dans BasePage
         # ==========================================
 
-        self.content_layout.addWidget(scroll)
+        self.content_layout.addWidget(scroll_area)
+
+        self.setStyleSheet("""
+                    QWidget#DashboardPage, QScrollArea, QScrollArea > QWidget > QWidget {
+                        background-color: #0f111a;
+                    }
+                """)

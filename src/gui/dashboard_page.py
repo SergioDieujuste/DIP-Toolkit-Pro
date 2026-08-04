@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QGridLayout,
     QLabel,
+    QScrollArea
 )
 
 from src.gui.info_card import InfoCard
@@ -23,33 +24,58 @@ class Dashboard(QWidget):
         # Layout principal
         # ==================================================
 
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(25, 25, 25, 25)
-        main_layout.setSpacing(20)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(15)
 
         # ==================================================
-        # Titre
+        # En-tête (Titre & Sous-titre)
         # ==================================================
+
+        title_layout = QVBoxLayout()
+        title_layout.setSpacing(4)
 
         title = QLabel("Tableau de bord")
         title.setObjectName("PageTitle")
+        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #ffffff;")
 
         subtitle = QLabel(
             "Vue d'ensemble de votre ordinateur et des informations système."
         )
         subtitle.setObjectName("PageSubtitle")
+        subtitle.setStyleSheet("font-size: 12px; color: #a0a5b5;")
         subtitle.setWordWrap(True)
 
-        main_layout.addWidget(title)
-        main_layout.addWidget(subtitle)
+        title_layout.addWidget(title)
+        title_layout.addWidget(subtitle)
+
+        main_layout.addLayout(title_layout)
+
+        # ==================================================
+        # Zone défilante (QScrollArea)
+        # ==================================================
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+        """)
+
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_layout.setSpacing(15)
 
         # ==================================================
         # Grille des cartes
         # ==================================================
 
         grid = QGridLayout()
-        grid.setHorizontalSpacing(20)
-        grid.setVerticalSpacing(20)
+        grid.setHorizontalSpacing(15)
+        grid.setVerticalSpacing(15)
 
         self.pc_card = InfoCard(
             "💻 Ordinateur",
@@ -84,7 +110,14 @@ class Dashboard(QWidget):
 
         grid.addWidget(self.disk_card, 2, 0)
 
-        main_layout.addLayout(grid)
-        main_layout.addStretch()
+        scroll_layout.addLayout(grid)
+        scroll_layout.addStretch()
 
-        self.setLayout(main_layout)
+        scroll_area.setWidget(scroll_content)
+        main_layout.addWidget(scroll_area)
+
+        self.setStyleSheet("""
+            QWidget#DashboardPage, QScrollArea, QScrollArea > QWidget > QWidget {
+                background-color: #0f111a;
+            }
+        """)
