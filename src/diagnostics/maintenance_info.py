@@ -3,6 +3,7 @@ import shutil
 import tempfile
 import subprocess
 import platform
+import webbrowser
 
 class MaintenanceInfo:
     """Classe regroupant les actions de nettoyage et maintenance du système."""
@@ -102,3 +103,19 @@ class MaintenanceInfo:
             return True, "La corbeille a été vidée."
         except Exception as e:
             return False, f"Erreur lors du vidage de la corbeille : {e}"
+
+    @staticmethod
+    def _launch_rustdesk():
+        # Recherche du fichier .exe dans assets/tools/
+        rustdesk_path = os.path.join(os.getcwd(), "assets", "tools", "rustdesk.exe")
+
+        if os.path.exists(rustdesk_path):
+            try:
+                subprocess.Popen([rustdesk_path])
+                return True, "RustDesk démarré avec succès."
+            except Exception as e:
+                return False, f"Erreur lors du lancement : {e}"
+        else:
+            # Si le fichier local n'existe pas, ouvre le site web
+            webbrowser.open("https://rustdesk.com/")
+            return True, "Fichier local introuvable. Page web ouverte."

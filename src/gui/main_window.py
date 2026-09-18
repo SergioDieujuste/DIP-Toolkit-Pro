@@ -17,6 +17,7 @@ from src.gui.pages.settings_page import SettingsPage
 from src.gui.pages.live_monitor_page import LiveMonitorPage
 from src.gui.pages.printer_page import PrinterPage
 from src.gui.pages.security_page import SecurityPage
+from src.gui.pages.knowledge_page import KnowledgePage 
 
 
 class MainWindow(QMainWindow):
@@ -59,6 +60,7 @@ class MainWindow(QMainWindow):
             "Sécurité": SecurityPage(),
             "Maintenance": MaintenancePage(),
             "Rapport": ReportPage(),
+            "Base de connaissances": KnowledgePage(),
             "Paramètres": SettingsPage(),
         }
 

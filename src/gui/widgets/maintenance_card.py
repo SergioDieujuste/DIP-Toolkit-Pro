@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
 from PySide6.QtCore import Qt, QThread, Signal
 
+
 # Import de la logique backend
 try:
     from src.diagnostics.maintenance_info import MaintenanceInfo
