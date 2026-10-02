@@ -1,265 +1,149 @@
-import os
-import subprocess
-import ctypes
-from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
-    QHBoxLayout,
-    QVBoxLayout,
-    QPushButton,
-    QScrollArea,
-    QWidget,
-    QFrame,
-    QLabel,
-    QTextEdit,
-    QMessageBox,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QScrollArea
 )
+from PySide6.QtCore import Qt, QThread, Signal
 
-from .base_page import BasePage
-
-
-def is_admin():
-    try:
-        return ctypes.windll.shell32.IsUserAnAdmin() != 0
-    except Exception:
-        return False
+# Imports des modules avec gestion des chemins
+from src.diagnostics.security_info import SecurityInfo
+from src.gui.widgets.security_card import SecurityCard
 
 
 class SecurityWorker(QThread):
-    output_signal = Signal(str)
-    finished_signal = Signal(bool, str)
-
-    def __init__(self, action_type):
-        super().__init__()
-        self.action_type = action_type
+    """Thread secondaire pour exécuter les vérifications de sécurité sans figer l'interface."""
+    finished = Signal(list)
 
     def run(self):
-        if self.action_type == "quick_scan":
-            self.run_ps_defender("Start-MpScan -ScanType QuickScan", "Scan rapide Windows Defender")
-        elif self.action_type == "update_signatures":
-            self.run_ps_defender("Update-MpSignature", "Mise à jour des définitions Defender")
-        elif self.action_type in ["enable_fw", "disable_fw"]:
-            self.toggle_firewall()
-
-    def run_ps_defender(self, ps_cmd_defender, label):
-        self.output_signal.emit(f"🛡️ Lancement : {label}...\n")
-
-        if not is_admin():
-            self.output_signal.emit("⚠️ Privilèges Administrateur requis.\nDemande d'autorisation UAC en cours...\n")
-            try:
-                # Lance PowerShell en tant qu'administrateur avec pause à la fin pour voir le résultat
-                ps_cmd = f'Start-Process powershell -ArgumentList "-NoExit -Command {ps_cmd_defender}" -Verb RunAs'
-                res = subprocess.run(["powershell", "-Command", ps_cmd], capture_output=True)
-                
-                if res.returncode == 0:
-                    msg = f"✅ {label} démarré dans une fenêtre PowerShell Administrateur !"
-                    self.output_signal.emit(f"{msg}\n")
-                    self.finished_signal.emit(True, msg)
-                else:
-                    msg = "Action annulée par l'utilisateur."
-                    self.output_signal.emit(f"❌ {msg}\n")
-                    self.finished_signal.emit(False, msg)
-            except Exception as e:
-                self.output_signal.emit(f"❌ Erreur UAC : {str(e)}\n")
-                self.finished_signal.emit(False, str(e))
-            return
-
-        # Si l'application est DÉJÀ lancée en admin
-        try:
-            full_cmd = f"powershell -Command \"{ps_cmd_defender}\""
-            process = subprocess.Popen(
-                full_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="cp1252",
-                errors="ignore",
-                shell=True
-            )
-
-            for line in iter(process.stdout.readline, ""):
-                if line:
-                    self.output_signal.emit(line)
-
-            process.stdout.close()
-            process.wait()
-
-            if process.returncode == 0:
-                msg = f"✅ {label} terminé avec succès !"
-                self.output_signal.emit(f"\n{msg}\n")
-                self.finished_signal.emit(True, msg)
-            else:
-                msg = f"⚠️ {label} terminé avec le code : {process.returncode}"
-                self.output_signal.emit(f"\n{msg}\n")
-                self.finished_signal.emit(False, msg)
-        except Exception as e:
-            self.output_signal.emit(f"\n❌ Erreur : {str(e)}\n")
-            self.finished_signal.emit(False, str(e))
-
-    def toggle_firewall(self):
-        state = "on" if self.action_type == "enable_fw" else "off"
-        action_label = "Activation" if state == "on" else "Désactivation"
-        self.output_signal.emit(f"🧱 {action_label} du pare-feu Windows...\n")
-
-        cmd = f"netsh advfirewall set allprofiles state {state}"
-
-        if not is_admin():
-            self.output_signal.emit("⚠️ Privilèges Administrateur requis.\nDemande UAC en cours...\n")
-            ps_cmd = f'Start-Process cmd -ArgumentList "/c {cmd}" -Verb RunAs'
-            res = subprocess.run(["powershell", "-Command", ps_cmd], capture_output=True)
-            if res.returncode == 0:
-                msg = f"Pare-feu passé sur {state.upper()}."
-                self.output_signal.emit(f"✅ {msg}\n")
-                self.finished_signal.emit(True, msg)
-            else:
-                self.finished_signal.emit(False, "Action refusée.")
-            return
-
-        try:
-            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding="cp1252")
-            if res.returncode == 0:
-                msg = f"Le pare-feu Windows a été passé sur : {state.upper()}"
-                self.output_signal.emit(f"✅ {msg}\n")
-                self.finished_signal.emit(True, msg)
-            else:
-                self.output_signal.emit(f"❌ Erreur : {res.stderr}\n")
-                self.finished_signal.emit(False, res.stderr)
-        except Exception as e:
-            self.output_signal.emit(f"❌ Exception : {str(e)}\n")
-            self.finished_signal.emit(False, str(e))
+        checks = SecurityInfo.get_security_status()
+        self.finished.emit(checks)
 
 
-class SecurityPage(BasePage):
+class SecurityPage(QWidget):
+    """Page affichant le bilan de sécurité système (Pare-feu, Antivirus, UAC...)."""
 
-    def __init__(self):
-        super().__init__(
-            "🛡️ Sécurité & Antivirus",
-            "Contrôlez l'état de Windows Defender et du pare-feu du système."
-        )
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("security_page")
 
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
+        self.worker = None
+        self.init_ui()
+        self.load_security_checks()
 
-        scroll_content = QWidget()
-        scroll_layout = QVBoxLayout(scroll_content)
-        scroll_layout.setContentsMargins(0, 0, 0, 0)
-        scroll_layout.setSpacing(15)
+        self.setStyleSheet("""
+                    QWidget#DashboardPage, QScrollArea, QScrollArea > QWidget > QWidget {
+                        background-color: #0f111a;
+                    }
+                """)    
+
+    def init_ui(self):
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(15)
 
         # ----------------------------------------------------
-        # BARRE D'ACTIONS
+        # 1. EN-TÊTE DE LA PAGE (Titre + Bouton Actualiser)
         # ----------------------------------------------------
-        btn_style = """
+        header_layout = QHBoxLayout()
+
+        title_layout = QVBoxLayout()
+        title_label = QLabel("Sécurité & Protection")
+        title_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #ffffff;")
+
+        subtitle_label = QLabel("État du pare-feu, de l'antivirus et du contrôle d'accès")
+        subtitle_label.setStyleSheet("font-size: 12px; color: #a0a5b5;")
+
+        title_layout.addWidget(title_label)
+        title_layout.addWidget(subtitle_label)
+
+        header_layout.addLayout(title_layout)
+        header_layout.addStretch()
+
+        # Bouton Actualiser
+        self.refresh_btn = QPushButton(" Actualiser")
+        self.refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.refresh_btn.setStyleSheet("""
             QPushButton {
                 background-color: #1e222d;
-                color: #ffffff;
-                border: 1px solid #2e3440;
-                padding: 10px 14px;
+                color: #00adb5;
+                border: 1px solid #00adb5;
+                padding: 8px 16px;
                 border-radius: 6px;
                 font-weight: bold;
-                font-size: 12px;
             }
             QPushButton:hover {
                 background-color: #00adb5;
-                border-color: #00adb5;
+                color: #ffffff;
             }
             QPushButton:disabled {
-                background-color: #141721;
-                color: #555555;
-            }
-        """
-
-        actions_layout = QHBoxLayout()
-        actions_layout.setSpacing(10)
-
-        self.btn_scan = QPushButton("🔍 Scan Rapide Defender")
-        self.btn_scan.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_scan.setStyleSheet(btn_style)
-        self.btn_scan.clicked.connect(lambda: self.run_action("quick_scan"))
-
-        self.btn_update = QPushButton("🔄 Mettre à jour Defender")
-        self.btn_update.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_update.setStyleSheet(btn_style)
-        self.btn_update.clicked.connect(lambda: self.run_action("update_signatures"))
-
-        self.btn_enable_fw = QPushButton("🧱 Activer Pare-feu")
-        self.btn_enable_fw.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_enable_fw.setStyleSheet(btn_style)
-        self.btn_enable_fw.clicked.connect(lambda: self.run_action("enable_fw"))
-
-        self.btn_disable_fw = QPushButton("⚠️ Désactiver Pare-feu")
-        self.btn_disable_fw.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_disable_fw.setStyleSheet(btn_style)
-        self.btn_disable_fw.clicked.connect(lambda: self.run_action("disable_fw"))
-
-        actions_layout.addWidget(self.btn_scan)
-        actions_layout.addWidget(self.btn_update)
-        actions_layout.addWidget(self.btn_enable_fw)
-        actions_layout.addWidget(self.btn_disable_fw)
-        actions_layout.addStretch()
-
-        scroll_layout.addLayout(actions_layout)
-
-        # ----------------------------------------------------
-        # CONSOLE DE SORTIE
-        # ----------------------------------------------------
-        console_card = QFrame()
-        console_card.setStyleSheet("""
-            QFrame {
-                background-color: #1e222d;
-                border: 1px solid #2e3440;
-                border-radius: 8px;
+                border-color: #4c566a;
+                color: #4c566a;
             }
         """)
-        console_layout = QVBoxLayout(console_card)
-        console_layout.setContentsMargins(18, 16, 18, 16)
-        console_layout.setSpacing(10)
+        self.refresh_btn.clicked.connect(self.load_security_checks)
+        header_layout.addWidget(self.refresh_btn)
 
-        title = QLabel("💻 État des opérations de sécurité")
-        title.setStyleSheet("font-weight: bold; font-size: 14px; color: #00adb5;")
+        main_layout.addLayout(header_layout)
 
-        self.console = QTextEdit()
-        self.console.setReadOnly(True)
-        self.console.setStyleSheet("""
-            QTextEdit {
-                background-color: #0f111a;
-                color: #00ffcc;
-                font-family: 'Consolas', 'Courier New', monospace;
-                font-size: 12px;
-                border: 1px solid #2e3440;
-                border-radius: 6px;
-                padding: 10px;
+        # ----------------------------------------------------
+        # 2. ZONE DÉFILANTE (SCROLL AREA) POUR LES CARTES
+        # ----------------------------------------------------
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: transparent;
             }
         """)
-        self.console.setPlaceholderText("Les résultats des analyses s'afficheront ici...")
 
-        console_layout.addWidget(title)
-        console_layout.addWidget(self.console)
+        self.scroll_content = QWidget()
+        self.cards_layout = QVBoxLayout(self.scroll_content)
+        self.cards_layout.setContentsMargins(0, 0, 0, 0)
+        self.cards_layout.setSpacing(10)
+        self.cards_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        scroll_layout.addWidget(console_card)
-        scroll_area.setWidget(scroll_content)
-        self.content_layout.addWidget(scroll_area)
+        self.scroll_area.setWidget(self.scroll_content)
+        main_layout.addWidget(self.scroll_area)
 
-    def set_buttons_enabled(self, enabled):
-        self.btn_scan.setEnabled(enabled)
-        self.btn_update.setEnabled(enabled)
-        self.btn_enable_fw.setEnabled(enabled)
-        self.btn_disable_fw.setEnabled(enabled)
+    def load_security_checks(self):
+        """Lance l'analyse asynchrone des paramètres de sécurité."""
+        self.refresh_btn.setEnabled(False)
+        self.refresh_btn.setText(" Vérification...")
 
-    def run_action(self, action_type):
-        self.set_buttons_enabled(False)
-        self.console.clear()
+        self._clear_cards()
 
-        self.worker = SecurityWorker(action_type)
-        self.worker.output_signal.connect(self.update_console)
-        self.worker.finished_signal.connect(self.on_action_finished)
+        # Message pendant la vérification
+        loading_label = QLabel("Analyse des protections du système...")
+        loading_label.setStyleSheet("color: #a0a5b5; font-size: 14px; font-style: italic;")
+        loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.cards_layout.addWidget(loading_label)
+
+        # Lancement du Worker Thread
+        self.worker = SecurityWorker()
+        self.worker.finished.connect(self._on_checks_loaded)
         self.worker.start()
 
-    def update_console(self, text):
-        self.console.append(text.strip())
+    def _on_checks_loaded(self, checks: list):
+        """Callback après réception des données."""
+        self._clear_cards()
+        self.refresh_btn.setEnabled(True)
+        self.refresh_btn.setText(" Actualiser")
 
-    def on_action_finished(self, success, message):
-        self.set_buttons_enabled(True)
-        if success:
-            QMessageBox.information(self, "Sécurité", f"✅ {message}")
-        else:
-            QMessageBox.warning(self, "Sécurité", f"⚠️ {message}")
+        if not checks:
+            empty_label = QLabel("Aucun module de sécurité analysable.")
+            empty_label.setStyleSheet("color: #e74c3c; font-size: 14px;")
+            empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.cards_layout.addWidget(empty_label)
+            return
+
+        for check in checks:
+            card = SecurityCard(check)
+            self.cards_layout.addWidget(card)
+
+    def _clear_cards(self):
+        """Vide le conteneur des cartes."""
+        while self.cards_layout.count():
+            item = self.cards_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()

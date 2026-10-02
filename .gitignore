@@ -1,0 +1,14 @@
+# Environnements et caches Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Sorties de compilation PyInstaller
+build/
+dist/
+
+# Fichiers générés à l'utilisation (propres à chaque poste)
+settings.json
+rapports/
+*.log

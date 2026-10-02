@@ -1,7 +1,9 @@
 import json
 import os
 
-SETTINGS_FILE = "settings.json"
+from src.utils.paths import settings_path
+
+SETTINGS_FILE = str(settings_path())
 
 DEFAULT_SETTINGS = {
     "theme": "Sombre (Turquoise)",

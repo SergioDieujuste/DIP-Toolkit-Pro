@@ -1,4 +1,4 @@
-from pathlib import Path
+from src.utils.paths import resource_path
 
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QIcon, QPixmap
@@ -32,7 +32,7 @@ class Sidebar(QWidget):
         logo = QLabel()
         logo.setObjectName("SidebarLogo")
 
-        pixmap = QPixmap("assets/logo/logo-web-transparent.png")
+        pixmap = QPixmap(str(resource_path("assets/logo/logo-web-transparent.png")))
 
         logo.setPixmap(
             pixmap.scaled(
@@ -82,7 +82,7 @@ class Sidebar(QWidget):
         # Boutons
         # ==================================================
 
-        icons = Path("assets/icons")
+        icons = resource_path("assets/icons")
 
         modules = [
             ("Tableau de bord", "layout-dashboard.svg"),

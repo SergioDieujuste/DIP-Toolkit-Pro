@@ -4,10 +4,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 # Imports des modules avec gestion des chemins
-try:
-    from src.gui.widgets.settings_card import SettingsCard
-except ModuleNotFoundError:
-    from widgets.settings_card import SettingsCard
+from src.gui.widgets.settings_card import SettingsCard
 
 
 class SettingsPage(QWidget):

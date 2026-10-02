@@ -4,10 +4,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 # Imports des modules avec gestion des chemins
-try:
-    from src.gui.widgets.report_card import ReportCard
-except ModuleNotFoundError:
-    from widgets.report_card import ReportCard
+from src.gui.widgets.report_card import ReportCard
 
 
 class ReportPage(QWidget):
@@ -36,7 +33,7 @@ class ReportPage(QWidget):
         header_layout = QHBoxLayout()
 
         title_layout = QVBoxLayout()
-        title_label = QLabel("Rapports & Expatriation PDF")
+        title_label = QLabel("Rapports & Exportation PDF")
         title_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #ffffff;")
 
         subtitle_label = QLabel("Générez un bilan d'intervention complet à remettre au client")

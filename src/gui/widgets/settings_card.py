@@ -5,10 +5,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 # Import de la logique backend
-try:
-    from src.diagnostics.settings_info import SettingsInfo
-except ModuleNotFoundError:
-    from diagnostics.settings_info import SettingsInfo
+from src.diagnostics.settings_info import SettingsInfo
 
 
 class SettingsCard(QFrame):
