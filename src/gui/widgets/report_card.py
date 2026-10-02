@@ -2,10 +2,15 @@ from PySide6.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel, 
     QLineEdit, QCheckBox, QPushButton, QFileDialog
 )
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
+
+import os
+import socket
 
 # Import de la logique backend
-from src.diagnostics.report_info import ReportInfo
+from src.diagnostics.report_info import ReportInfo, default_filename
+from src.diagnostics.settings_info import SettingsInfo
 
 
 class ReportWorker(QThread):
@@ -72,6 +77,7 @@ class ReportCard(QFrame):
         tech_label.setStyleSheet("color: #a0a5b5; font-size: 11px;")
         self.tech_input = QLineEdit()
         self.tech_input.setPlaceholderText("Ex: Technicien DIP")
+        self.tech_input.setText(SettingsInfo.load_settings().get("default_tech_name", ""))
         self.tech_input.setStyleSheet("""
             QLineEdit {
                 background-color: #141721;
@@ -88,6 +94,42 @@ class ReportCard(QFrame):
         inputs_layout.addLayout(client_box)
         inputs_layout.addLayout(tech_box)
         layout.addLayout(inputs_layout)
+
+        # Coordonnées du client (facultatives)
+        contact_style = """
+            QLineEdit {
+                background-color: #141721;
+                color: #ffffff;
+                border: 1px solid #2e3440;
+                padding: 6px 10px;
+                border-radius: 5px;
+            }
+            QLineEdit:focus { border: 1px solid #00adb5; }
+        """
+        contact_layout = QHBoxLayout()
+        contact_layout.setSpacing(15)
+
+        phone_box = QVBoxLayout()
+        phone_label = QLabel("Téléphone du client (facultatif) :")
+        phone_label.setStyleSheet("color: #a0a5b5; font-size: 11px;")
+        self.phone_input = QLineEdit()
+        self.phone_input.setPlaceholderText("Ex: 06 12 34 56 78")
+        self.phone_input.setStyleSheet(contact_style)
+        phone_box.addWidget(phone_label)
+        phone_box.addWidget(self.phone_input)
+
+        email_box = QVBoxLayout()
+        email_label = QLabel("E-mail du client (facultatif) :")
+        email_label.setStyleSheet("color: #a0a5b5; font-size: 11px;")
+        self.email_input = QLineEdit()
+        self.email_input.setPlaceholderText("Ex: client@exemple.fr")
+        self.email_input.setStyleSheet(contact_style)
+        email_box.addWidget(email_label)
+        email_box.addWidget(self.email_input)
+
+        contact_layout.addLayout(phone_box)
+        contact_layout.addLayout(email_box)
+        layout.addLayout(contact_layout)
 
         # ----------------------------------------------------
         # 2. SECTIONS À INCLURE (CHECKBOXES)
@@ -166,11 +208,15 @@ class ReportCard(QFrame):
 
     def _select_file_and_generate(self):
         """Demande l'emplacement de sauvegarde et génère le PDF."""
-        default_name = f"Rapport_DIP_{self.client_input.text().strip() or 'Client'}.pdf"
+        settings = SettingsInfo.load_settings()
+        default_name = default_filename(
+            self.client_input.text().strip(), socket.gethostname()
+        )
+        start_path = os.path.join(settings.get("default_export_dir", ""), default_name)
         filepath, _ = QFileDialog.getSaveFileName(
             self,
             "Enregistrer le Rapport PDF",
-            default_name,
+            start_path,
             "Fichiers PDF (*.pdf)"
         )
 
@@ -179,6 +225,8 @@ class ReportCard(QFrame):
 
         options = {
             'client_name': self.client_input.text().strip() or "Client Standard",
+            'client_phone': self.phone_input.text().strip(),
+            'client_email': self.email_input.text().strip(),
             'tech_name': self.tech_input.text().strip() or "Technicien DIP",
             'include_system': self.cb_system.isChecked(),
             'include_disks': self.cb_disks.isChecked(),
@@ -188,9 +236,10 @@ class ReportCard(QFrame):
         }
 
         self.generate_btn.setEnabled(False)
-        self.generate_btn.setText(" Génération en cours...")
+        self.generate_btn.setText(" Analyse en cours (10 à 20 s)...")
         self.status_label.setVisible(False)
 
+        self.last_filepath = filepath
         self.worker = ReportWorker(filepath, options)
         self.worker.finished.connect(self._on_pdf_generated)
         self.worker.start()
@@ -204,3 +253,7 @@ class ReportCard(QFrame):
         self.status_label.setText(message)
         self.status_label.setStyleSheet(f"color: {color}; font-size: 11px; font-weight: bold;")
         self.status_label.setVisible(True)
+
+        # Ouvre le PDF pour que le technicien le relise avant de le remettre
+        if success and getattr(self, "last_filepath", None):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(self.last_filepath))

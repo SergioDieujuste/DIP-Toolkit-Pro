@@ -23,6 +23,7 @@ def get_disks():
             "used": round(usage.used / (1024**3), 1),
             "free": round(usage.free / (1024**3), 1),
             "percent": int(usage.percent),
+            "removable": "removable" in (partition.opts or "").lower(),
 
         })
 

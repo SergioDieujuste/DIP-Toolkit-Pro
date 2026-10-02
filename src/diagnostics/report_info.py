@@ -1,141 +1,332 @@
-import os
-import platform
+"""Génération du rapport PDF remis au client.
+
+Chaîne complète : collecte (report_data) -> analyse (report_analysis) -> mise en page.
+"""
+
 from datetime import datetime
+from xml.sax.saxutils import escape
+
+from src.diagnostics import report_analysis as ra
+from src.diagnostics.report_data import collect_all
+from src.utils.company import load_company, logo_path
 
 try:
-    from reportlab.lib.pagesizes import letter, A4
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import cm
+    from reportlab.platypus import (
+        HRFlowable, Image, KeepTogether, Paragraph, SimpleDocTemplate,
+        Spacer, Table, TableStyle,
+    )
     HAS_REPORTLAB = True
 except ImportError:
     HAS_REPORTLAB = False
 
+ACCENT = "#00A7A7"
+DARK = "#1E3A5F"
+GREY = "#666666"
+LIGHT = "#F4F6F8"
+BORDER = "#D5DAE0"
+
+STATUS_COLORS = {
+    ra.OK: "#2E7D32",
+    ra.WARNING: "#F57C00",
+    ra.DANGER: "#D32F2F",
+    ra.UNKNOWN: "#757575",
+}
+
+PAGE_W = A4[0] if HAS_REPORTLAB else 595
+MARGIN = 40
+CONTENT_W = PAGE_W - 2 * MARGIN
+
+
+def _e(value) -> str:
+    """Échappe un texte dynamique pour reportlab (&, <, >)."""
+    return escape(str(value if value is not None else ""))
+
+
+def default_filename(client_name: str = "", hostname: str = "") -> str:
+    """Nom de fichier horodaté, ex. Rapport_PCDUPONT_20261002_1430.pdf."""
+    stamp = datetime.now().strftime("%Y%m%d_%H%M")
+    base = (hostname or client_name or "PC").strip()
+    safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in base)
+    return f"Rapport_{safe}_{stamp}.pdf"
+
 
 class ReportInfo:
-    """Classe chargée d'assembler et de générer le rapport PDF d'intervention."""
+    """Assemble et génère le rapport PDF d'intervention."""
 
     @staticmethod
     def generate_pdf(filepath: str, options: dict) -> tuple[bool, str]:
         """
-        Génère un fichier PDF récapitulatif.
         options = {
-            'client_name': str,
-            'tech_name': str,
-            'include_system': bool,
-            'include_disks': bool,
-            'include_network': bool,
-            'include_security': bool,
-            'include_printers': bool
+            'client_name', 'client_phone', 'client_email', 'tech_name',
+            'include_system', 'include_disks', 'include_network',
+            'include_security', 'include_printers'
         }
         """
         if not HAS_REPORTLAB:
-            return False, "La bibliothèque 'reportlab' n'est pas installée. Lancez 'pip install reportlab'."
+            return False, "La bibliothèque 'reportlab' n'est pas installée (pip install reportlab)."
 
         try:
-            doc = SimpleDocTemplate(
-                filepath,
-                pagesize=A4,
-                rightMargin=36,
-                leftMargin=36,
-                topMargin=36,
-                bottomMargin=36
-            )
-            story = []
-            styles = getSampleStyleSheet()
+            data = collect_all(options)
+            analysis = ra.analyze(data, options)
+            company = load_company()
+            ReportInfo.build_pdf(filepath, data, analysis, options, company)
+            return True, f"Rapport PDF généré avec succès :\n{filepath}"
+        except PermissionError:
+            return False, ("Impossible d'écrire le fichier. Le PDF est peut-être déjà ouvert, "
+                           "ou le dossier est protégé : choisissez un autre emplacement.")
+        except Exception as exc:
+            return False, f"Erreur lors de la création du PDF : {exc}"
 
-            # Styles personnalisés aux couleurs DIP (Sombre/Turquoise)
-            title_style = ParagraphStyle(
-                'DocTitle',
-                parent=styles['Heading1'],
-                fontSize=22,
-                textColor=colors.HexColor('#00adb5'),
-                spaceAfter=6
-            )
-            subtitle_style = ParagraphStyle(
-                'DocSubtitle',
-                parent=styles['Normal'],
-                fontSize=10,
-                textColor=colors.HexColor('#666666'),
-                spaceAfter=15
-            )
-            heading_style = ParagraphStyle(
-                'SectionHeading',
-                parent=styles['Heading2'],
-                fontSize=14,
-                textColor=colors.HexColor('#1e222d'),
-                spaceBefore=12,
-                spaceAfter=6
-            )
-            body_style = ParagraphStyle(
-                'Body',
-                parent=styles['Normal'],
-                fontSize=10,
-                textColor=colors.HexColor('#333333'),
-                spaceAfter=4
-            )
+    # ------------------------------------------------------------------
+    # Mise en page
+    # ------------------------------------------------------------------
+    @staticmethod
+    def build_pdf(filepath, data, analysis, options, company):
+        styles = getSampleStyleSheet()
+        body = ParagraphStyle("Body", parent=styles["Normal"], fontSize=9.5,
+                              leading=13, textColor=colors.HexColor("#333333"))
+        small = ParagraphStyle("Small", parent=body, fontSize=8.5, leading=11,
+                               textColor=colors.HexColor(GREY))
+        h2 = ParagraphStyle("H2", parent=styles["Heading2"], fontSize=13,
+                            textColor=colors.HexColor(DARK), spaceBefore=14, spaceAfter=6)
+        title = ParagraphStyle("Title", parent=styles["Heading1"], fontSize=20,
+                               textColor=colors.HexColor(DARK), spaceAfter=2)
+        right = ParagraphStyle("Right", parent=body, alignment=2)  # 2 = droite
 
-            # ----------------------------------------------------
-            # 1. EN-TÊTE DU RAPPORT
-            # ----------------------------------------------------
-            story.append(Paragraph("Dépannage Informatique Plus", title_style))
-            story.append(Paragraph("Rapport de Diagnostic & Intervention Système", subtitle_style))
-            story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#00adb5'), spaceAfter=15))
+        def P(text, style=body):
+            return Paragraph(text, style)
 
-            # Table d'informations sur l'intervention
-            date_str = datetime.now().strftime("%d/%m/%Y à %H:%M")
-            info_data = [
-                [Paragraph("<b>Client :</b>", body_style), Paragraph(options.get('client_name', 'Client Standard'), body_style)],
-                [Paragraph("<b>Technicien :</b>", body_style), Paragraph(options.get('tech_name', 'Technicien DIP'), body_style)],
-                [Paragraph("<b>Date de l'analyse :</b>", body_style), Paragraph(date_str, body_style)],
-                [Paragraph("<b>Système d'exploitation :</b>", body_style), Paragraph(f"{platform.system()} {platform.release()} ({platform.architecture()[0]})", body_style)]
+        def status_cell(status):
+            style = ParagraphStyle(
+                "St", parent=body, fontSize=8.5, alignment=1,
+                textColor=colors.white, fontName="Helvetica-Bold")
+            return P(_e(ra.STATUS_LABELS[status]), style)
+
+        def table_style(extra=None):
+            base = [
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor(BORDER)),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
             ]
-            info_table = Table(info_data, colWidths=[130, 380])
-            info_table.setStyle(TableStyle([
-                ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8f9fa')),
-                ('PADDING', (0,0), (-1,-1), 6),
-                ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#e0e0e0')),
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ]))
-            story.append(info_table)
-            story.append(Spacer(1, 15))
+            return TableStyle(base + (extra or []))
 
-            # ----------------------------------------------------
-            # 2. SECTIONS DU RAPPORT SELON OPTIONS
-            # ----------------------------------------------------
-            if options.get('include_system', True):
-                story.append(Paragraph("1. Supervision & Système", heading_style))
-                story.append(Paragraph("Analyse globale des ressources CPU, RAM et performances de la machine.", body_style))
-                story.append(Spacer(1, 8))
+        def header_row(cells):
+            st = ParagraphStyle("Th", parent=body, fontName="Helvetica-Bold",
+                                textColor=colors.white, fontSize=9)
+            return [P(_e(c), st) for c in cells]
 
-            if options.get('include_disks', True):
-                story.append(Paragraph("2. Analyse des Disques", heading_style))
-                story.append(Paragraph("Vérification de l'espace de stockage et de la santé des partitions de disque.", body_style))
-                story.append(Spacer(1, 8))
+        generated = data["generated_at"]
+        system = data["system"] or {}
+        story = []
 
-            if options.get('include_network', True):
-                story.append(Paragraph("3. Configuration Réseau", heading_style))
-                story.append(Paragraph("Vérification des adresses IP (Locale/Publique) et connectivité passerelle.", body_style))
-                story.append(Spacer(1, 8))
+        # ---------- En-tête : logo + coordonnées entreprise ----------
+        logo_cell = ""
+        try:
+            lp = logo_path(company)
+            from PIL import Image as PILImage  # dimension réelle du logo
+            with PILImage.open(lp) as im:
+                w, h = im.size
+            logo_w = 4.2 * cm
+            logo_cell = Image(str(lp), width=logo_w, height=logo_w * h / w)
+        except Exception:
+            logo_cell = P(f"<b>{_e(company['name'])}</b>")
 
-            if options.get('include_security', True):
-                story.append(Paragraph("4. État de la Sécurité", heading_style))
-                story.append(Paragraph("Bilan des protections système (Pare-feu Windows, Antivirus et UAC).", body_style))
-                story.append(Spacer(1, 8))
+        contact_lines = [f"<b>{_e(company['name'])}</b>"]
+        for key in ("address", "phone", "email", "website"):
+            if company.get(key):
+                contact_lines.append(_e(company[key]))
 
-            if options.get('include_printers', True):
-                story.append(Paragraph("5. Périphériques & Imprimantes", heading_style))
-                story.append(Paragraph("Liste des imprimantes configurées et vérification du statut en ligne.", body_style))
-                story.append(Spacer(1, 8))
+        header = Table([[logo_cell, P("<br/>".join(contact_lines), right)]],
+                       colWidths=[CONTENT_W * 0.45, CONTENT_W * 0.55])
+        header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                                    ("RIGHTPADDING", (0, 0), (-1, -1), 0)]))
+        story += [header, Spacer(1, 6),
+                  HRFlowable(width="100%", thickness=1.5, color=colors.HexColor(ACCENT),
+                             spaceAfter=10)]
 
-            # Pied de page
-            story.append(Spacer(1, 20))
-            story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#cccccc'), spaceAfter=10))
-            story.append(Paragraph("<i>Document généré automatiquement par DIP Toolkit Pro.</i>", ParagraphStyle('Footer', parent=body_style, fontSize=8, textColor=colors.gray)))
+        # ---------- Titre + fiche d'intervention ----------
+        story.append(P(_e(company.get("tagline") or "Rapport de diagnostic"), title))
+        story.append(P(f"Établi le {generated.strftime('%d/%m/%Y à %H:%M')}", small))
+        story.append(Spacer(1, 8))
 
-            # Génération effective du PDF
-            doc.build(story)
-            return True, f"Rapport PDF généré avec succès dans :\n{filepath}"
+        model = " ".join(x for x in (system.get("manufacturer"), system.get("model")) if x)
+        info_rows = [("Client", options.get("client_name") or "Client")]
+        if options.get("client_phone"):
+            info_rows.append(("Téléphone", options["client_phone"]))
+        if options.get("client_email"):
+            info_rows.append(("E-mail", options["client_email"]))
+        info_rows += [
+            ("Technicien", options.get("tech_name") or "Technicien"),
+            ("Nom du poste", system.get("hostname", "Inconnu")),
+        ]
+        if model:
+            info_rows.append(("Modèle", model))
+        if system.get("serial"):
+            info_rows.append(("N° de série", system["serial"]))
 
-        except Exception as e:
-            return False, f"Erreur lors de la création du PDF : {e}"
+        info = Table([[P(f"<b>{_e(k)}</b>"), P(_e(v))] for k, v in info_rows],
+                     colWidths=[110, CONTENT_W - 110])
+        info.setStyle(table_style([("BACKGROUND", (0, 0), (0, -1), colors.HexColor(LIGHT))]))
+        story += [info, Spacer(1, 12)]
+
+        # ---------- Bandeau de verdict ----------
+        overall = analysis["overall"]
+        banner_style = ParagraphStyle("Banner", parent=body, fontSize=12,
+                                      textColor=colors.white, fontName="Helvetica-Bold")
+        banner = Table(
+            [[P(f"{_e(ra.STATUS_LABELS[overall])} - {_e(analysis['verdict'])}", banner_style)]],
+            colWidths=[CONTENT_W])
+        banner.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(STATUS_COLORS[overall])),
+            ("TOPPADDING", (0, 0), (-1, -1), 10), ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+            ("LEFTPADDING", (0, 0), (-1, -1), 12),
+        ]))
+        story += [banner, Spacer(1, 10)]
+
+        # ---------- Synthèse ----------
+        story.append(P("Synthèse", h2))
+        rows = [header_row(["Domaine", "État", "Constat"])]
+        extra = [("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(DARK))]
+        for i, item in enumerate(analysis["summary"], start=1):
+            rows.append([P(f"<b>{_e(item['title'])}</b>"), status_cell(item["status"]),
+                         P(_e(item["text"]))])
+            extra.append(("BACKGROUND", (1, i), (1, i),
+                          colors.HexColor(STATUS_COLORS[item["status"]])))
+        t = Table(rows, colWidths=[90, 85, CONTENT_W - 175], repeatRows=1)
+        t.setStyle(table_style(extra))
+        story.append(t)
+
+        # ---------- Recommandations ----------
+        story.append(P("Recommandations", h2))
+        recs = analysis["recommendations"]
+        if not recs:
+            story.append(P("Aucune action nécessaire pour le moment."))
+        else:
+            for n, r in enumerate(recs, start=1):
+                color = STATUS_COLORS[r["level"]]
+                story.append(P(f"<font color='{color}'><b>{n}.</b></font> {_e(r['text'])}"))
+                story.append(Spacer(1, 3))
+
+        # ---------- Détails ----------
+        story.append(P("Détails techniques", h2))
+
+        if options.get("include_system", True) and system:
+            story.append(P("<b>Système, processeur et mémoire</b>"))
+            rows = [
+                ("Système d'exploitation", f"{system['os_name']} ({system['architecture']})"),
+                ("Version", system["os_version"]),
+                ("Processeur", system["cpu_name"]),
+                ("Cœurs / threads", f"{system['cpu_cores']} / {system['cpu_threads']}"),
+                ("Charge du processeur", f"{system['cpu_percent']:.0f} %"),
+                ("Mémoire (RAM)", f"{system['ram_used_gb']} Go utilisés sur "
+                                  f"{system['ram_total_gb']} Go ({system['ram_percent']} %)"),
+                ("Dernier redémarrage", f"il y a {system['uptime_days']:.0f} jour(s)"),
+            ]
+            if system.get("bios"):
+                rows.append(("BIOS", system["bios"]))
+            t = Table([[P(f"<b>{_e(k)}</b>"), P(_e(v))] for k, v in rows],
+                      colWidths=[150, CONTENT_W - 150])
+            t.setStyle(table_style([("BACKGROUND", (0, 0), (0, -1), colors.HexColor(LIGHT))]))
+            story += [t, Spacer(1, 8)]
+
+        if options.get("include_disks", True):
+            story.append(P("<b>Stockage</b>"))
+            disks = data["disks"]
+            if not disks:
+                story.append(P("Non vérifié.", small))
+            else:
+                rows = [header_row(["Lecteur", "Format", "Capacité", "Utilisé", "Libre", "Rempli"])]
+                extra = [("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(DARK))]
+                for i, d in enumerate(disks, start=1):
+                    st = ra.disk_status(d)
+                    drive = f"{_e(d['mount'])} <font color='{GREY}' size='8'>({ra.disk_kind(d)})</font>"
+                    rows.append([P(drive), P(_e(d["filesystem"])),
+                                 P(f"{d['total']} Go"), P(f"{d['used']} Go"),
+                                 P(f"{d['free']} Go"),
+                                 P(f"<font color='{GREY if d.get('removable') else STATUS_COLORS[st]}'><b>{d['percent']} %</b></font>")])
+                t = Table(rows, colWidths=[110, 55, 80, 80, 80, CONTENT_W - 405], repeatRows=1)
+                t.setStyle(table_style(extra))
+                story.append(t)
+            story.append(Spacer(1, 8))
+
+        if options.get("include_network", True):
+            story.append(P("<b>Réseau</b>"))
+            net = data["network"]
+            if net is None:
+                story.append(P("Non vérifié.", small))
+            else:
+                rows = [header_row(["Connexion", "Adresse IP", "Adresse MAC"])]
+                for itf in net["interfaces"]:
+                    rows.append([P(_e(itf["name"])), P(_e(itf["ip"])), P(_e(itf["mac"]))])
+                if not net["interfaces"]:
+                    rows.append([P("Aucune connexion active"), P(""), P("")])
+                rows.append([P("<b>Accès Internet</b>"),
+                             P("Oui" if net["internet"] else "Non"), P("")])
+                t = Table(rows, colWidths=[CONTENT_W * 0.40, CONTENT_W * 0.25, CONTENT_W * 0.35],
+                          repeatRows=1)
+                t.setStyle(table_style([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(DARK))]))
+                story.append(t)
+            story.append(Spacer(1, 8))
+
+        if options.get("include_security", True):
+            story.append(P("<b>Sécurité</b>"))
+            checks = data["security"]
+            if not checks:
+                story.append(P("Non vérifié.", small))
+            else:
+                rows = [header_row(["Contrôle", "État", "Détail"])]
+                extra = [("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(DARK))]
+                for i, c in enumerate(checks, start=1):
+                    st = {"green": ra.OK, "orange": ra.WARNING, "red": ra.DANGER}.get(
+                        c.get("color"), ra.UNKNOWN)
+                    rows.append([P(_e(c["title"])), status_cell(st), P(_e(c["details"]))])
+                    extra.append(("BACKGROUND", (1, i), (1, i), colors.HexColor(STATUS_COLORS[st])))
+                t = Table(rows, colWidths=[130, 85, CONTENT_W - 215], repeatRows=1)
+                t.setStyle(table_style(extra))
+                story.append(t)
+            story.append(Spacer(1, 8))
+
+        if options.get("include_printers", True):
+            story.append(P("<b>Imprimantes</b>"))
+            printers = data["printers"]
+            if printers is None:
+                story.append(P("Non vérifié.", small))
+            elif not printers:
+                story.append(P("Aucune imprimante installée.", small))
+            else:
+                rows = [header_row(["Imprimante", "Port", "État"])]
+                for p in printers:
+                    name = p["name"] + (" (par défaut)" if p.get("is_default") else "")
+                    rows.append([P(_e(name)), P(_e(p["port"])), P(_e(p["status"]))])
+                t = Table(rows, colWidths=[CONTENT_W * 0.55, CONTENT_W * 0.25, CONTENT_W * 0.20],
+                          repeatRows=1)
+                t.setStyle(table_style([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(DARK))]))
+                story.append(t)
+
+        # ---------- Pied de page ----------
+        footer_text = (f"{company['name']} - rapport généré le "
+                       f"{generated.strftime('%d/%m/%Y à %H:%M')} par DIP Toolkit Pro")
+
+        def draw_footer(canvas, doc):
+            canvas.saveState()
+            canvas.setFont("Helvetica", 8)
+            canvas.setFillColor(colors.HexColor(GREY))
+            canvas.drawString(MARGIN, 22, footer_text)
+            canvas.drawRightString(PAGE_W - MARGIN, 22, f"Page {doc.page}")
+            canvas.restoreState()
+
+        doc = SimpleDocTemplate(
+            filepath, pagesize=A4,
+            leftMargin=MARGIN, rightMargin=MARGIN, topMargin=36, bottomMargin=44,
+            title=f"Rapport - {system.get('hostname', '')}",
+            author=company["name"],
+        )
+        doc.build(story, onFirstPage=draw_footer, onLaterPages=draw_footer)

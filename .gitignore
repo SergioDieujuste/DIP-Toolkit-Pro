@@ -12,3 +12,4 @@ dist/
 settings.json
 rapports/
 *.log
+company.json
