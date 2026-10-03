@@ -7,11 +7,12 @@ la section vaut None et le rapport indique « non vérifié » au lieu de plante
 import os
 import platform
 import socket
-import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 import psutil
 
+from src.diagnostics import health_info
 from src.diagnostics.disk_info import get_disks
 from src.diagnostics.printer_info import PrinterInfo
 from src.diagnostics.security_info import SecurityInfo
@@ -176,26 +177,49 @@ def _safe(func):
     try:
         return func()
     except Exception as exc:  # une section en échec ne doit pas bloquer le rapport
-        print(f"[ReportData] {func.__name__} a échoué : {exc}")
+        print(f"[ReportData] {getattr(func, '__name__', func)} a échoué : {exc}")
         return None
 
 
 def collect_all(options: dict) -> dict:
-    """Collecte uniquement les sections demandées. None = non vérifié."""
-    data = {
-        "generated_at": datetime.now(),
-        "system": _safe(collect_system),  # toujours nécessaire (nom du poste, OS)
-        "disks": None,
-        "network": None,
-        "security": None,
-        "printers": None,
+    """Collecte uniquement les sections demandées, en parallèle. None = non vérifié.
+
+    Les collectes lentes (mises à jour Windows : jusqu'à 2 min) tournent en même temps
+    que les autres au lieu de s'additionner.
+    """
+    # clé du résultat -> (fonction de collecte, option qui l'active, activée par défaut ?)
+    plan = {
+        "system": (collect_system, None, True),  # toujours nécessaire (nom du poste, OS)
+        "disks": (collect_disks, "include_disks", True),
+        "network": (collect_network, "include_network", True),
+        "security": (collect_security, "include_security", True),
+        "printers": (collect_printers, "include_printers", True),
+        # Sections de santé : désactivées tant que l'option n'est pas demandée
+        "disk_health": (health_info.collect_disk_health, "include_health", False),
+        "battery": (health_info.collect_battery, "include_health", False),
+        "updates": (health_info.collect_updates, "include_updates", False),
+        "problem_devices": (health_info.collect_problem_devices, "include_updates", False),
+        "events": (health_info.collect_events, "include_events", False),
     }
-    if options.get("include_disks", True):
-        data["disks"] = _safe(collect_disks)
-    if options.get("include_network", True):
-        data["network"] = _safe(collect_network)
-    if options.get("include_security", True):
-        data["security"] = _safe(collect_security)
-    if options.get("include_printers", True):
-        data["printers"] = _safe(collect_printers)
+
+    data = {"generated_at": datetime.now()}
+    for key in plan:
+        data[key] = None
+
+    wanted = {k: fn for k, (fn, opt, default) in plan.items()
+              if opt is None or options.get(opt, default)}
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        futures = {k: pool.submit(_safe, fn) for k, fn in wanted.items()}
+        for key, fut in futures.items():
+            data[key] = fut.result()
     return data
+
+
+if __name__ == "__main__":
+    # Outil de dépannage : python -m src.diagnostics.report_data
+    import json
+    result = collect_all({k: True for k in (
+        "include_system", "include_disks", "include_network", "include_security",
+        "include_printers", "include_health", "include_updates", "include_events")})
+    print(json.dumps(result, indent=2, ensure_ascii=False, default=str))

@@ -164,11 +164,26 @@ class ReportCard(QFrame):
         self.cb_printers.setChecked(True)
         self.cb_printers.setStyleSheet(checkbox_style)
 
+        self.cb_health = QCheckBox("Santé matérielle (disques SMART, batterie)")
+        self.cb_health.setChecked(True)
+        self.cb_health.setStyleSheet(checkbox_style)
+
+        self.cb_updates = QCheckBox("Mises à jour Windows & pilotes (peut prendre jusqu'à 2 min)")
+        self.cb_updates.setChecked(True)
+        self.cb_updates.setStyleSheet(checkbox_style)
+
+        self.cb_events = QCheckBox("Stabilité : écrans bleus et arrêts inattendus (7 jours)")
+        self.cb_events.setChecked(True)
+        self.cb_events.setStyleSheet(checkbox_style)
+
         layout.addWidget(self.cb_system)
         layout.addWidget(self.cb_disks)
         layout.addWidget(self.cb_network)
         layout.addWidget(self.cb_security)
         layout.addWidget(self.cb_printers)
+        layout.addWidget(self.cb_health)
+        layout.addWidget(self.cb_updates)
+        layout.addWidget(self.cb_events)
 
         # ----------------------------------------------------
         # 3. BOUTON DE GÉNÉRATION & MESSAGE
@@ -232,11 +247,14 @@ class ReportCard(QFrame):
             'include_disks': self.cb_disks.isChecked(),
             'include_network': self.cb_network.isChecked(),
             'include_security': self.cb_security.isChecked(),
-            'include_printers': self.cb_printers.isChecked()
+            'include_printers': self.cb_printers.isChecked(),
+            'include_health': self.cb_health.isChecked(),
+            'include_updates': self.cb_updates.isChecked(),
+            'include_events': self.cb_events.isChecked()
         }
 
         self.generate_btn.setEnabled(False)
-        self.generate_btn.setText(" Analyse en cours (10 à 20 s)...")
+        self.generate_btn.setText(" Analyse en cours (jusqu'à 2 min)...")
         self.status_label.setVisible(False)
 
         self.last_filepath = filepath

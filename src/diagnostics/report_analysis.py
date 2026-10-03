@@ -24,6 +24,11 @@ RAM_DANGER_PERCENT = 90
 RAM_MIN_RECOMMENDED_GB = 8
 CPU_WARNING_PERCENT = 90
 UPTIME_WARNING_DAYS = 30
+DISK_WEAR_WARNING_PERCENT = 80   # usure d'un SSD
+DISK_WEAR_DANGER_PERCENT = 90
+DISK_TEMP_WARNING_C = 65
+BATTERY_WARNING_PERCENT = 80     # capacité restante par rapport à la capacité d'origine
+BATTERY_WORN_PERCENT = 50
 
 _COLOR_TO_STATUS = {"green": OK, "orange": WARNING, "red": DANGER}
 _SEVERITY = {OK: 0, WARNING: 1, DANGER: 2}
@@ -233,6 +238,168 @@ def analyze_printers(printers):
     return OK, f"{len(printers)} imprimante(s) installée(s), en ligne.", []
 
 
+def _plural(n, singular, plural=None):
+    return singular if n <= 1 else (plural or singular + "s")
+
+
+def analyze_disk_health(disks):
+    if disks is None:
+        return UNKNOWN, "Santé des disques non vérifiée.", []
+    if not disks:
+        return UNKNOWN, "Aucun disque interne détecté.", []
+
+    statuses, recs = [], []
+    for d in disks:
+        name = d["name"]
+        health = d["health"].lower()
+        st = OK
+
+        if health == "healthy" or health == "":
+            pass
+        elif "unhealthy" in health:
+            st = DANGER
+            recs.append(_rec(DANGER,
+                f"Le disque {name} signale un état défectueux : sauvegarder les données "
+                "sans attendre et prévoir son remplacement."))
+        elif "warning" in health:
+            st = WARNING
+            recs.append(_rec(WARNING,
+                f"Le disque {name} signale un avertissement de santé : sauvegarder les "
+                "données importantes et surveiller son état."))
+
+        wear = d.get("wear")
+        if wear is not None and wear >= DISK_WEAR_DANGER_PERCENT:
+            st = worst([st, DANGER])
+            recs.append(_rec(DANGER,
+                f"Le SSD {name} est usé à {wear:.0f} % : fin de vie proche, remplacement à prévoir."))
+        elif wear is not None and wear >= DISK_WEAR_WARNING_PERCENT:
+            st = worst([st, WARNING])
+            recs.append(_rec(WARNING,
+                f"Le SSD {name} est usé à {wear:.0f} % : prévoir son remplacement à moyen terme."))
+
+        temp = d.get("temp")
+        if temp is not None and temp >= DISK_TEMP_WARNING_C:
+            st = worst([st, WARNING])
+            recs.append(_rec(WARNING,
+                f"Le disque {name} chauffe ({temp:.0f} °C) : vérifier la ventilation du PC."))
+
+        if d.get("errors", 0) > 0:
+            st = worst([st, WARNING])
+            recs.append(_rec(WARNING,
+                f"Le disque {name} a enregistré {d['errors']} erreur(s) de lecture/écriture "
+                "non corrigée(s) : sauvegarder les données et surveiller."))
+        statuses.append(st)
+
+    status = worst(statuses)
+    if status == OK:
+        text = f"{len(disks)} disque(s) interne(s) en bonne santé."
+    else:
+        text = "Au moins un disque demande de l'attention."
+    return status, text, recs
+
+
+def analyze_battery(battery):
+    """Retourne None si le PC n'a pas de batterie (la ligne est alors masquée)."""
+    if battery is None:
+        return UNKNOWN, "Batterie non vérifiée.", []
+    if not battery.get("present"):
+        return None
+
+    health = battery.get("health_percent")
+    cycles = battery.get("cycles")
+    cyc_txt = f", {cycles:.0f} cycles" if cycles else ""
+
+    if health is None:
+        return UNKNOWN, "Capacité de la batterie non disponible sur ce modèle.", []
+    # Une batterie usée gêne mais n'est pas un problème « critique » : jamais de rouge.
+    if health < BATTERY_WORN_PERCENT:
+        return WARNING, f"Batterie très usée ({health} % de sa capacité d'origine{cyc_txt}).", [
+            _rec(WARNING, f"La batterie n'a plus que {health} % de sa capacité d'origine : "
+                          "l'autonomie est très réduite, un remplacement est conseillé.")]
+    if health < BATTERY_WARNING_PERCENT:
+        return WARNING, f"Batterie usée ({health} % de sa capacité d'origine{cyc_txt}).", [
+            _rec(WARNING, f"La batterie conserve {health} % de sa capacité d'origine : "
+                          "l'autonomie diminue, un remplacement sera à envisager.")]
+    return OK, f"Batterie en bon état ({health} % de sa capacité d'origine{cyc_txt}).", []
+
+
+def analyze_updates(updates):
+    if updates is None:
+        return UNKNOWN, "Mises à jour non vérifiées (connexion ou service Windows Update).", []
+
+    items = updates["updates"]
+    n = len(items)
+    security = sum(1 for u in items if u["is_security"])
+    drivers = sum(1 for u in items if u["is_driver"])
+    recs, statuses = [], []
+
+    if n:
+        statuses.append(WARNING)
+        detail = []
+        if security:
+            detail.append(f"dont {security} de sécurité")
+        if drivers:
+            detail.append(f"{drivers} {_plural(drivers, 'pilote')}")
+        suffix = f" ({', '.join(detail)})" if detail else ""
+        recs.append(_rec(WARNING,
+            f"{n} {_plural(n, 'mise')} à jour Windows en attente{suffix} : "
+            "les installer pour la sécurité et la stabilité du PC."))
+    if updates["reboot_pending"]:
+        statuses.append(WARNING)
+        recs.append(_rec(WARNING,
+            "Un redémarrage est en attente pour terminer des mises à jour : redémarrer le PC."))
+
+    if not statuses:
+        return OK, "Windows est à jour.", []
+    if n:
+        text = f"{n} {_plural(n, 'mise')} à jour en attente"
+        if security:
+            text += f" dont {security} de sécurité"
+        if drivers:
+            text += f", {drivers} {_plural(drivers, 'pilote')}"
+        text += "."
+    else:
+        text = "Redémarrage en attente."
+    return WARNING, text, recs
+
+
+def analyze_drivers(devices):
+    if devices is None:
+        return UNKNOWN, "Périphériques non vérifiés.", []
+    if not devices:
+        return OK, "Aucun périphérique en erreur.", []
+
+    names = ", ".join(d["name"] for d in devices[:4])
+    more = f" et {len(devices) - 4} autre(s)" if len(devices) > 4 else ""
+    return WARNING, f"{len(devices)} périphérique(s) en erreur.", [
+        _rec(WARNING, f"Périphérique(s) en erreur dans Windows : {names}{more}. "
+                      "Réinstaller ou mettre à jour leur pilote.")]
+
+
+def analyze_events(events):
+    if events is None:
+        return UNKNOWN, "Journal système non vérifié.", []
+
+    days = events["days"]
+    bsod, unexpected = events["bsod"], events["unexpected_shutdowns"]
+    recs, parts = [], []
+
+    if bsod:
+        parts.append(f"{bsod} {_plural(bsod, 'écran bleu', 'écrans bleus')}")
+        recs.append(_rec(WARNING,
+            f"{bsod} {_plural(bsod, 'écran bleu', 'écrans bleus')} sur les {days} derniers "
+            "jours : à analyser (pilote, mémoire ou disque en cause possible)."))
+    if unexpected:
+        parts.append(f"{unexpected} {_plural(unexpected, 'arrêt inattendu', 'arrêts inattendus')}")
+        recs.append(_rec(WARNING,
+            f"{unexpected} {_plural(unexpected, 'arrêt inattendu', 'arrêts inattendus')} du PC "
+            f"sur les {days} derniers jours : vérifier l'alimentation, la surchauffe et les pilotes."))
+
+    if parts:
+        return WARNING, " et ".join(parts) + f" sur {days} jours.", recs
+    return OK, f"Aucun plantage détecté sur {days} jours.", []
+
+
 # --- Synthèse globale -------------------------------------------------------
 
 def analyze(data: dict, options: dict) -> dict:
@@ -257,6 +424,18 @@ def analyze(data: dict, options: dict) -> dict:
         add("Sécurité", analyze_security(data["security"]))
     if options.get("include_printers", True):
         add("Imprimantes", analyze_printers(data["printers"]))
+
+    # Sections de santé (désactivées par défaut tant que non demandées)
+    if options.get("include_health", False):
+        add("Santé des disques", analyze_disk_health(data.get("disk_health")))
+        battery = analyze_battery(data.get("battery"))
+        if battery is not None:  # pas de ligne pour un PC fixe sans batterie
+            add("Batterie", battery)
+    if options.get("include_updates", False):
+        add("Mises à jour", analyze_updates(data.get("updates")))
+        add("Pilotes", analyze_drivers(data.get("problem_devices")))
+    if options.get("include_events", False):
+        add("Stabilité", analyze_events(data.get("events")))
 
     overall = worst([s["status"] for s in summary])
     recs.sort(key=lambda r: -_SEVERITY.get(r["level"], 0))

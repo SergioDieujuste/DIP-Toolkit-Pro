@@ -311,6 +311,122 @@ class ReportInfo:
                 t.setStyle(table_style([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(DARK))]))
                 story.append(t)
 
+        # ---------- Santé matérielle ----------
+        if options.get("include_health", False):
+            story.append(Spacer(1, 8))
+            story.append(P("<b>Santé des disques</b>"))
+            dh = data.get("disk_health")
+            if not dh:
+                story.append(P("Non vérifié.", small))
+            else:
+                rows = [header_row(["Disque", "Type", "Taille", "État", "Usure", "Temp.", "Heures"])]
+                extra = [("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(DARK))]
+                for i, d in enumerate(dh, start=1):
+                    h = d["health"].lower()
+                    st = (ra.DANGER if "unhealthy" in h else ra.WARNING if "warning" in h
+                          else ra.OK if h in ("healthy", "") else ra.UNKNOWN)
+                    label = {"healthy": "Bon", "": "Inconnu"}.get(h, d["health"])
+                    wear = f"{d['wear']:.0f} %" if d.get("wear") is not None else "n/d"
+                    temp = f"{d['temp']:.0f} °C" if d.get("temp") is not None else "n/d"
+                    hours = f"{d['hours']:.0f} h" if d.get("hours") is not None else "n/d"
+                    rows.append([P(_e(d["name"])), P(_e(d["media"] or "?")),
+                                 P(f"{d['size_gb']} Go"),
+                                 P(f"<font color='{STATUS_COLORS[st]}'><b>{_e(label)}</b></font>"),
+                                 P(wear), P(temp), P(hours)])
+                t = Table(rows, colWidths=[CONTENT_W - 330, 55, 55, 55, 55, 55, 55], repeatRows=1)
+                t.setStyle(table_style(extra))
+                story.append(t)
+                story.append(P("n/d : information non fournie par ce disque ou droits insuffisants.",
+                               small))
+            story.append(Spacer(1, 8))
+
+            bat = data.get("battery")
+            if bat and bat.get("present"):
+                bat_title = P("<b>Batterie</b>")
+                rows = []
+                if bat.get("charge") is not None:
+                    rows.append(("Charge actuelle", f"{bat['charge']:.0f} %"
+                                 + (" (sur secteur)" if bat.get("on_ac") else " (sur batterie)")))
+                if bat.get("health_percent") is not None:
+                    rows.append(("Capacité restante",
+                                 f"{bat['health_percent']} % de la capacité d'origine"))
+                if bat.get("design_mwh"):
+                    rows.append(("Capacité d'origine / actuelle",
+                                 f"{bat['design_mwh'] / 1000:.1f} Wh / "
+                                 f"{(bat.get('full_mwh') or 0) / 1000:.1f} Wh"))
+                if bat.get("cycles"):
+                    rows.append(("Cycles de charge", f"{bat['cycles']:.0f}"))
+                if rows:
+                    t = Table([[P(f"<b>{_e(k)}</b>"), P(_e(v))] for k, v in rows],
+                              colWidths=[170, CONTENT_W - 170])
+                    t.setStyle(table_style([("BACKGROUND", (0, 0), (0, -1),
+                                             colors.HexColor(LIGHT))]))
+                    story.append(KeepTogether([bat_title, t]))  # jamais coupé entre 2 pages
+                else:
+                    story.append(bat_title)
+                    story.append(P("Détails indisponibles sur ce modèle.", small))
+                story.append(Spacer(1, 8))
+
+        # ---------- Mises à jour et pilotes ----------
+        if options.get("include_updates", False):
+            story.append(P("<b>Mises à jour Windows</b>"))
+            up = data.get("updates")
+            if up is None:
+                story.append(P("Non vérifié (connexion Internet ou service Windows Update).", small))
+            elif not up["updates"]:
+                story.append(P("Aucune mise à jour en attente." + (
+                    " Un redémarrage est en attente." if up["reboot_pending"] else ""), small))
+            else:
+                rows = [header_row(["Mise à jour", "Type"])]
+                for u in up["updates"][:12]:
+                    kind = "Pilote" if u["is_driver"] else "Sécurité" if u["is_security"] else "Autre"
+                    rows.append([P(_e(u["title"])), P(kind)])
+                extra_count = len(up["updates"]) - 12
+                if extra_count > 0:
+                    rows.append([P(f"... et {extra_count} autre(s)"), P("")])
+                t = Table(rows, colWidths=[CONTENT_W - 80, 80], repeatRows=1)
+                t.setStyle(table_style([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(DARK))]))
+                story.append(t)
+                if up["reboot_pending"]:
+                    story.append(P("Un redémarrage est également en attente.", small))
+            story.append(Spacer(1, 8))
+
+            story.append(P("<b>Pilotes et périphériques</b>"))
+            devs = data.get("problem_devices")
+            if devs is None:
+                story.append(P("Non vérifié.", small))
+            elif not devs:
+                story.append(P("Aucun périphérique en erreur.", small))
+            else:
+                rows = [header_row(["Périphérique", "Code d'erreur Windows"])]
+                for d in devs[:15]:
+                    rows.append([P(_e(d["name"])), P(str(d["code"]))])
+                t = Table(rows, colWidths=[CONTENT_W - 140, 140], repeatRows=1)
+                t.setStyle(table_style([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(DARK))]))
+                story.append(t)
+            story.append(Spacer(1, 8))
+
+        # ---------- Stabilité ----------
+        if options.get("include_events", False):
+            story.append(P("<b>Stabilité (journal système)</b>"))
+            ev = data.get("events")
+            if ev is None:
+                story.append(P("Non vérifié.", small))
+            else:
+                rows = [
+                    (f"Écrans bleus ({ev['days']} jours)", str(ev["bsod"])),
+                    (f"Arrêts inattendus ({ev['days']} jours)", str(ev["unexpected_shutdowns"])),
+                    ("Événements critiques", str(ev["critical"])),
+                    ("Erreurs système", str(ev["errors"])),
+                ]
+                t = Table([[P(f"<b>{_e(k)}</b>"), P(_e(v))] for k, v in rows],
+                          colWidths=[200, CONTENT_W - 200])
+                t.setStyle(table_style([("BACKGROUND", (0, 0), (0, -1), colors.HexColor(LIGHT))]))
+                story.append(t)
+                story.append(P("Quelques erreurs système sont normales sur un PC en bon état : "
+                               "seuls les écrans bleus et les arrêts inattendus sont retenus "
+                               "dans l'évaluation.", small))
+
         # ---------- Pied de page ----------
         footer_text = (f"{company['name']} - rapport généré le "
                        f"{generated.strftime('%d/%m/%Y à %H:%M')} par DIP Toolkit Pro")
