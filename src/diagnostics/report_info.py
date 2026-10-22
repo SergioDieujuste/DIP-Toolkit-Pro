@@ -6,6 +6,7 @@ Chaîne complète : collecte (report_data) -> analyse (report_analysis) -> mise 
 from datetime import datetime
 from xml.sax.saxutils import escape
 
+from src.diagnostics import history
 from src.diagnostics import report_analysis as ra
 from src.diagnostics.report_data import collect_all
 from src.utils.company import load_company, logo_path
@@ -74,6 +75,10 @@ class ReportInfo:
             analysis = ra.analyze(data, options)
             company = load_company()
             ReportInfo.build_pdf(filepath, data, analysis, options, company)
+            try:
+                history.record_report(filepath, data, analysis, options)
+            except Exception as exc:  # l'historique ne doit jamais faire échouer le rapport
+                print(f"[ReportInfo] Historique non mis à jour : {exc}")
             return True, f"Rapport PDF généré avec succès :\n{filepath}"
         except PermissionError:
             return False, ("Impossible d'écrire le fichier. Le PDF est peut-être déjà ouvert, "

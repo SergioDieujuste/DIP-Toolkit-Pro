@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt
 
 # Imports des modules avec gestion des chemins
 from src.gui.widgets.settings_card import SettingsCard
+from src.gui.widgets.company_card import CompanyCard
 
 
 class SettingsPage(QWidget):
@@ -65,9 +66,21 @@ class SettingsPage(QWidget):
         cards_layout.setSpacing(10)
         cards_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        # Ajout de la carte de paramètres
+        section_style = "font-size: 15px; font-weight: bold; color: #ffffff; margin-top: 6px;"
+
+        # Paramètres de l'application
+        app_title = QLabel("Application")
+        app_title.setStyleSheet(section_style)
+        cards_layout.addWidget(app_title)
         self.settings_card = SettingsCard()
         cards_layout.addWidget(self.settings_card)
+
+        # Informations de l'entreprise (en-tête des rapports clients)
+        company_title = QLabel("Informations de l'entreprise (rapports clients)")
+        company_title.setStyleSheet(section_style)
+        cards_layout.addWidget(company_title)
+        self.company_card = CompanyCard()
+        cards_layout.addWidget(self.company_card)
 
         scroll_area.setWidget(scroll_content)
         main_layout.addWidget(scroll_area)

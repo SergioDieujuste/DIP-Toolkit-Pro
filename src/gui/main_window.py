@@ -13,6 +13,7 @@ from src.gui.pages.network_page import NetworkPage
 from src.gui.pages.disk_page import DiskPage
 from src.gui.pages.maintenance_page import MaintenancePage
 from src.gui.pages.report_page import ReportPage
+from src.gui.pages.history_page import HistoryPage
 from src.gui.pages.settings_page import SettingsPage
 from src.gui.pages.live_monitor_page import LiveMonitorPage
 from src.gui.pages.printer_page import PrinterPage
@@ -59,6 +60,7 @@ class MainWindow(QMainWindow):
             "Sécurité": SecurityPage(),
             "Maintenance": MaintenancePage(),
             "Rapport": ReportPage(),
+            "Historique": HistoryPage(),
             "Paramètres": SettingsPage(),
         }
 

@@ -27,21 +27,33 @@ Résultat : `dist\DIP Toolkit Pro.exe`, un seul fichier à copier sur la clé US
 |---|---|---|
 | Logo, icônes, thème (embarqués) | `assets/` | dans l'.exe |
 | `settings.json` (modifiable) | racine du projet | **à côté de l'.exe** (mode portable) |
-| `company.json` (nom, logo, coordonnées du rapport) | racine du projet | **à côté de l'.exe** |
+| `company.json` + `logo_entreprise.png` (en-tête des rapports) | racine du projet | **à côté de l'.exe** |
+| `historique.json` (liste des rapports générés) | racine du projet | **à côté de l'.exe** |
 
 Si le dossier de l'.exe n'est pas modifiable, repli sur `%APPDATA%\DIP Toolkit Pro`.
 Les chemins sont gérés par `src/utils/paths.py` : ne jamais écrire `"assets/..."` en dur.
 
 ## Personnaliser les rapports
-Au premier rapport, un fichier `company.json` est créé à côté de l'application.
-Ouvrez-le avec le Bloc-notes pour renseigner `phone`, `email`, `website`, `address`,
-`tagline`, et éventuellement `logo` (chemin d'un autre logo png/jpg). Sans `logo`,
-le logo DIP intégré est utilisé.
+**Paramètres > Informations de l'entreprise (rapports clients)** : nom, titre du rapport,
+téléphone, e-mail, site web, adresse et logo (PNG ou JPG). Le logo choisi est *copié* à côté de
+l'application : il continue de fonctionner si l'image d'origine est déplacée ou si la clé USB change
+de lettre de lecteur. « Revenir au logo DIP » rétablit le logo intégré.
+(Le fichier `company.json` reste modifiable à la main si besoin.)
 
-Le rapport PDF contient : fiche client et technicien, verdict global, synthèse à
-voyants (Bon / À surveiller / Critique), recommandations automatiques, puis le détail
-technique. Les seuils (disque 80 %/90 %, RAM 80 %/90 %, redémarrage 30 jours...) sont
-regroupés en tête de `src/diagnostics/report_analysis.py`.
+Le rapport PDF contient : fiche client et technicien, verdict global, synthèse à voyants
+(Bon / À surveiller / Critique), recommandations automatiques, puis le détail technique.
+Les seuils (disque 80 %/90 %, RAM 80 %/90 %, redémarrage 30 jours...) sont regroupés en tête de
+`src/diagnostics/report_analysis.py`.
+
+## Historique et classement des rapports
+- Chaque PDF généré est classé automatiquement dans `<dossier d'export>/<Nom du client>/`.
+- La page **Historique** liste tous les rapports (date, client, poste, verdict, technicien), avec
+  recherche, ouverture du PDF ou de son dossier, et retrait de la liste (avec ou sans suppression du PDF).
+- Un client déjà connu est proposé à la saisie, et ses coordonnées sont pré-remplies. Cela marche à partir
+  du **nom**, du **téléphone** ou de l'**e-mail** : taper l'un des trois suffit à retrouver les deux autres
+  (les champs déjà remplis ne sont jamais écrasés). Le téléphone est reconnu quelle que soit son écriture
+  (`06 12 34 56 78`, `06.12.34.56.78`, `+33 6 12 34 56 78`).
+- `historique.json` contient des données de clients : sur une clé USB, pensez à la chiffrer (BitLocker).
 
 ## Santé, mises à jour et stabilité
 Trois cases de la page Rapport (cochées par défaut) ajoutent :
@@ -69,6 +81,8 @@ main.py                 point d'entrée
 src/diagnostics/        collecte (report_data), analyse (report_analysis), PDF (report_info)
 src/gui/                fenêtre, pages, widgets
 src/utils/paths.py      chemins (développement / .exe / clé USB)
+src/utils/company.py    informations et logo de l'entreprise
+src/diagnostics/history.py  historique des rapports
 assets/                 logo, icônes, thème
 tests/                  tests de démarrage
 ```

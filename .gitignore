@@ -13,3 +13,6 @@ settings.json
 rapports/
 *.log
 company.json
+historique.json
+historique.*.json
+logo_entreprise.*

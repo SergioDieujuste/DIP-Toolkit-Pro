@@ -1,14 +1,16 @@
 from PySide6.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel, 
-    QLineEdit, QCheckBox, QPushButton, QFileDialog
+    QLineEdit, QCheckBox, QPushButton, QFileDialog, QCompleter
 )
 from PySide6.QtCore import Qt, QThread, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 
 import os
 import socket
+from pathlib import Path
 
 # Import de la logique backend
+from src.diagnostics import history
 from src.diagnostics.report_info import ReportInfo, default_filename
 from src.diagnostics.settings_info import SettingsInfo
 
@@ -212,6 +214,8 @@ class ReportCard(QFrame):
         self.status_label.setVisible(False)
         layout.addWidget(self.status_label)
 
+        self._setup_client_memory()
+
         # Style de la carte
         self.setStyleSheet("""
             QFrame#report_card {
@@ -221,13 +225,72 @@ class ReportCard(QFrame):
             }
         """)
 
+    # ------------------------------------------------------------------
+    # Mémoire des clients : suggestions + pré-remplissage à partir du nom,
+    # du téléphone OU de l'e-mail (on ne remplit que les champs vides).
+    # ------------------------------------------------------------------
+    def _setup_client_memory(self):
+        self._contacts = {"by_name": {}, "by_phone": {}, "by_email": {}}
+        self._completers = {}
+
+        fields = (
+            ("names", self.client_input, self._autofill_from_name),
+            ("phones", self.phone_input, self._autofill_from_phone),
+            ("emails", self.email_input, self._autofill_from_email),
+        )
+        for key, field, handler in fields:
+            completer = QCompleter([], self)
+            completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+            completer.setFilterMode(Qt.MatchFlag.MatchContains)
+            field.setCompleter(completer)
+            field.editingFinished.connect(handler)
+            completer.activated.connect(lambda _text, h=handler: h())
+            self._completers[key] = completer
+
+        self._refresh_known_clients()
+
+    def _refresh_known_clients(self):
+        self._contacts = history.contact_index()
+        for key, completer in self._completers.items():
+            completer.model().setStringList(self._contacts[key])
+
+    def _fill_missing(self, contact):
+        """Complète nom, téléphone et e-mail avec ceux du client reconnu, sans rien écraser."""
+        if not contact:
+            return
+        for field, key in ((self.client_input, "name"),
+                           (self.phone_input, "phone"),
+                           (self.email_input, "email")):
+            if contact.get(key) and not field.text().strip():
+                field.setText(contact[key])
+
+    def _autofill_from_name(self):
+        text = self.client_input.text().strip().lower()
+        self._fill_missing(self._contacts["by_name"].get(text))
+
+    def _autofill_from_phone(self):
+        number = history.normalize_phone(self.phone_input.text())
+        self._fill_missing(self._contacts["by_phone"].get(number))
+
+    def _autofill_from_email(self):
+        text = self.email_input.text().strip().lower()
+        self._fill_missing(self._contacts["by_email"].get(text))
+
     def _select_file_and_generate(self):
         """Demande l'emplacement de sauvegarde et génère le PDF."""
         settings = SettingsInfo.load_settings()
         default_name = default_filename(
             self.client_input.text().strip(), socket.gethostname()
         )
-        start_path = os.path.join(settings.get("default_export_dir", ""), default_name)
+        # Classement automatique : <dossier d'export>/<Nom du client>/Rapport_...pdf
+        folder = history.client_report_dir(
+            settings.get("default_export_dir", ""), self.client_input.text().strip())
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            export_dir = settings.get("default_export_dir", "")
+            folder = Path(export_dir) if export_dir else Path.home()
+        start_path = str(folder / default_name)
         filepath, _ = QFileDialog.getSaveFileName(
             self,
             "Enregistrer le Rapport PDF",
@@ -271,6 +334,9 @@ class ReportCard(QFrame):
         self.status_label.setText(message)
         self.status_label.setStyleSheet(f"color: {color}; font-size: 11px; font-weight: bold;")
         self.status_label.setVisible(True)
+
+        if success:
+            self._refresh_known_clients()
 
         # Ouvre le PDF pour que le technicien le relise avant de le remettre
         if success and getattr(self, "last_filepath", None):

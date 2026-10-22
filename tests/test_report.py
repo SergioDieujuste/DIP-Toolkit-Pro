@@ -171,6 +171,7 @@ class TestPdf(unittest.TestCase):
             out = Path(tmp) / "r.pdf"
             with mock.patch("src.diagnostics.report_info.collect_all",
                             return_value=healthy_data()), \
+                 mock.patch("src.diagnostics.report_info.history.record_report"), \
                  mock.patch("src.diagnostics.report_info.load_company",
                             return_value=dict(company.DEFAULT_COMPANY)):
                 ok, msg = ReportInfo.generate_pdf(str(out), dict(ALL, client_name="X"))

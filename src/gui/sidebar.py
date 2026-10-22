@@ -94,6 +94,7 @@ class Sidebar(QWidget):
             ("Sécurité", "shield-lock.svg"),
             ("Maintenance", "tool.svg"),
             ("Rapport", "file-export.svg"),
+            ("Historique", "history.svg"),
             ("Base de connaissances", "books.svg"),
             ("Paramètres", "settings.svg"),
         ]
